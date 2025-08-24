@@ -1,15 +1,16 @@
 //lib/screens/main_desktop_screen.dart
 
-import 'package:desktop_scanner/services/pdf_processor.dart';
-import 'package:desktop_scanner/widgets/pdf_page_selector_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:data_table_2/data_table_2.dart';
 import 'dart:io';
 import '../services/batch_processor.dart';
+import '../services/pdf_processor.dart';
 import '../models/vehicle_detail.dart';
 import '../models/batch_process_result.dart';
 import '../services/export_service.dart';
+import '../widgets/pdf_page_selector_dialog.dart';
+import '../widgets/upload_progress_dialog.dart';
 
 class MainDesktopScreen extends StatefulWidget {
   const MainDesktopScreen({Key? key}) : super(key: key);
@@ -27,6 +28,7 @@ class _MainDesktopScreenState extends State<MainDesktopScreen> {
   File? _selectedPdfFile;
   List<BatchProcessResult> _results = [];
   bool _isProcessing = false;
+  bool _isUploading = false;
   double _processingProgress = 0.0;
   String _currentProcessingFile = '';
   String? _selectedFolderPath;
@@ -57,7 +59,7 @@ class _MainDesktopScreenState extends State<MainDesktopScreen> {
                           ? _buildEmptyState()
                           : _buildResultsView(),
                 ),
-                if (_results.isNotEmpty && !_isProcessing)
+                if (_results.isNotEmpty && !_isProcessing && !_isUploading)
                   _buildFooterActions(),
               ],
             ),
@@ -124,7 +126,10 @@ class _MainDesktopScreenState extends State<MainDesktopScreen> {
                     ),
                     const SizedBox(height: 8),
                     ElevatedButton.icon(
-                      onPressed: _isProcessing ? null : _selectPdfFile,
+                      onPressed:
+                          (_isProcessing || _isUploading)
+                              ? null
+                              : _selectPdfFile,
                       icon: const Icon(Icons.picture_as_pdf),
                       label: const Text('Select PDF'),
                       style: ElevatedButton.styleFrom(
@@ -163,7 +168,10 @@ class _MainDesktopScreenState extends State<MainDesktopScreen> {
                     ),
                     const SizedBox(height: 8),
                     ElevatedButton.icon(
-                      onPressed: _isProcessing ? null : _selectFolder,
+                      onPressed:
+                          (_isProcessing || _isUploading)
+                              ? null
+                              : _selectFolder,
                       icon: const Icon(Icons.folder_open),
                       label: const Text('Select Folder'),
                       style: ElevatedButton.styleFrom(
@@ -172,7 +180,8 @@ class _MainDesktopScreenState extends State<MainDesktopScreen> {
                     ),
                     const SizedBox(height: 8),
                     OutlinedButton.icon(
-                      onPressed: _isProcessing ? null : _selectFiles,
+                      onPressed:
+                          (_isProcessing || _isUploading) ? null : _selectFiles,
                       icon: const Icon(Icons.add_photo_alternate),
                       label: const Text('Select Files'),
                       style: OutlinedButton.styleFrom(
@@ -231,7 +240,7 @@ class _MainDesktopScreenState extends State<MainDesktopScreen> {
                 trailing: IconButton(
                   icon: const Icon(Icons.close, size: 18),
                   onPressed:
-                      _isProcessing
+                      (_isProcessing || _isUploading)
                           ? null
                           : () {
                             setState(() {
@@ -265,7 +274,7 @@ class _MainDesktopScreenState extends State<MainDesktopScreen> {
             trailing: IconButton(
               icon: const Icon(Icons.close, size: 18),
               onPressed:
-                  _isProcessing
+                  (_isProcessing || _isUploading)
                       ? null
                       : () {
                         setState(() {
@@ -322,57 +331,12 @@ class _MainDesktopScreenState extends State<MainDesktopScreen> {
             ],
           ),
           const Spacer(),
-          if (_canStartProcessing() && !_isProcessing)
+          if (_canStartProcessing() && !_isProcessing && !_isUploading)
             ElevatedButton.icon(
               onPressed: _startProcessing,
               icon: const Icon(Icons.play_arrow),
               label: Text(_getProcessButtonText()),
             ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _selectPdfFile() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf'],
-      allowMultiple: false,
-    );
-
-    if (result != null && result.files.first.path != null) {
-      final pdfFile = File(result.files.first.path!);
-
-      // Show PDF page selector dialog
-      final config = await showDialog<PdfProcessingConfig>(
-        context: context,
-        builder: (context) => PdfPageSelectorDialog(pdfFile: pdfFile),
-      );
-
-      if (config != null) {
-        setState(() {
-          _selectedPdfFile = pdfFile;
-          _selectedFiles.clear();
-          _selectedFolderPath = null;
-          _results.clear();
-          _currentProcessingType = ProcessingType.pdf;
-        });
-      }
-    }
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.folder_open, size: 120, color: Colors.grey[300]),
-          const SizedBox(height: 24),
-          const Text(
-            'No documents to process',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const Text('Select a folder or files to begin'),
         ],
       ),
     );
@@ -399,6 +363,23 @@ class _MainDesktopScreenState extends State<MainDesktopScreen> {
           const SizedBox(height: 16),
           Text('Processing: $_currentProcessingFile'),
           Text(_getProcessingSubtitle()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.folder_open, size: 120, color: Colors.grey[300]),
+          const SizedBox(height: 24),
+          const Text(
+            'No documents to process',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          const Text('Select a folder or files to begin'),
         ],
       ),
     );
@@ -475,30 +456,77 @@ class _MainDesktopScreenState extends State<MainDesktopScreen> {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           OutlinedButton.icon(
-            onPressed: () {
-              setState(() {
-                _results.clear();
-                _selectedFiles.clear();
-              });
-            },
+            onPressed:
+                (_isProcessing || _isUploading)
+                    ? null
+                    : () {
+                      setState(() {
+                        _results.clear();
+                        _selectedFiles.clear();
+                        _selectedPdfFile = null;
+                        _selectedFolderPath = null;
+                      });
+                    },
             icon: const Icon(Icons.clear),
             label: const Text('Clear All'),
           ),
           const SizedBox(width: 12),
           OutlinedButton.icon(
-            onPressed: () => _exportResults('csv'),
+            onPressed:
+                (_isProcessing || _isUploading)
+                    ? null
+                    : () => _exportResults('csv'),
             icon: const Icon(Icons.download),
             label: const Text('Export CSV'),
           ),
           const SizedBox(width: 12),
           ElevatedButton.icon(
-            onPressed: _saveToGoogleSheets,
-            icon: const Icon(Icons.cloud_upload),
-            label: const Text('Save to Sheets'),
+            onPressed:
+                (_isProcessing || _isUploading) ? null : _saveToGoogleSheets,
+            icon:
+                _isUploading
+                    ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                    : const Icon(Icons.cloud_upload),
+            label: Text(_isUploading ? 'Uploading...' : 'Save to Sheets'),
           ),
         ],
       ),
     );
+  }
+
+  // File Selection Methods
+  Future<void> _selectPdfFile() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+      allowMultiple: false,
+    );
+
+    if (result != null && result.files.first.path != null) {
+      final pdfFile = File(result.files.first.path!);
+
+      final config = await showDialog<PdfProcessingConfig>(
+        context: context,
+        builder: (context) => PdfPageSelectorDialog(pdfFile: pdfFile),
+      );
+
+      if (config != null) {
+        setState(() {
+          _selectedPdfFile = pdfFile;
+          _selectedFiles.clear();
+          _selectedFolderPath = null;
+          _results.clear();
+          _currentProcessingType = ProcessingType.pdf;
+        });
+      }
+    }
   }
 
   Future<void> _selectFolder() async {
@@ -550,6 +578,7 @@ class _MainDesktopScreenState extends State<MainDesktopScreen> {
     }
   }
 
+  // Processing Methods
   bool _canStartProcessing() {
     return (_selectedFiles.isNotEmpty || _selectedPdfFile != null);
   }
@@ -591,7 +620,6 @@ class _MainDesktopScreenState extends State<MainDesktopScreen> {
   }
 
   Future<void> _processPdf() async {
-    // Show PDF page selector dialog again to get processing config
     final config = await showDialog<PdfProcessingConfig>(
       context: context,
       builder: (context) => PdfPageSelectorDialog(pdfFile: _selectedPdfFile!),
@@ -656,6 +684,7 @@ class _MainDesktopScreenState extends State<MainDesktopScreen> {
     }
   }
 
+  // Export and Upload Methods
   Future<void> _exportResults(String format) async {
     final successfulResults =
         _results
@@ -667,7 +696,7 @@ class _MainDesktopScreenState extends State<MainDesktopScreen> {
 
     String? outputFile = await FilePicker.platform.saveFile(
       dialogTitle: 'Save export file',
-      fileName: 'vehicle_data.${format}',
+      fileName: 'vehicle_data.$format',
     );
 
     if (outputFile != null) {
@@ -686,9 +715,70 @@ class _MainDesktopScreenState extends State<MainDesktopScreen> {
             .map((r) => r.vehicleDetail!)
             .toList();
 
-    if (successfulResults.isEmpty) return;
+    if (successfulResults.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No successful records to upload')),
+      );
+      return;
+    }
 
-    await _batchProcessor.saveAllToGoogleSheets(successfulResults);
+    setState(() {
+      _isUploading = true;
+    });
+
+    try {
+      // Create controller for progress updates
+      final controller = UploadProgressController();
+
+      // Show progress dialog
+      final result = await showDialog<GoogleSheetsUploadResult>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          // Start the upload process
+          _performGoogleSheetsUpload(successfulResults, controller);
+
+          return UploadProgressDialog(
+            totalRecords: successfulResults.length,
+            controller: controller,
+          );
+        },
+      );
+
+      if (result != null) {
+        String message;
+        if (result.hasErrors) {
+          message =
+              '${result.successCount} records uploaded successfully, ${result.failedRecords.length} failed';
+        } else {
+          message = 'All ${result.successCount} records uploaded successfully!';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: result.hasErrors ? Colors.orange : Colors.green,
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isUploading = false;
+      });
+    }
+  }
+
+  Future<void> _performGoogleSheetsUpload(
+    List<VehicleDetail> details,
+    UploadProgressController controller,
+  ) async {
+    final result = await _batchProcessor.saveAllToGoogleSheets(
+      details,
+      onProgress: (current, total, currentRecord) {
+        controller.updateProgress(current, currentRecord);
+      },
+    );
+    controller.setCompleted(result);
   }
 }
 
