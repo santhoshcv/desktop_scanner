@@ -45,6 +45,9 @@ dependencies:
   data_table_2: ^2.6.0
   percent_indicator: ^4.2.5
   excel: ^4.0.6
+  pdf: ^3.11.3
+  printing: ^5.14.2
+  pdfx: ^2.9.2
 
 dev_dependencies:
   flutter_test:
