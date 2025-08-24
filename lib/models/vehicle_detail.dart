@@ -1,5 +1,4 @@
-//lib/models/vehicle_detail.dart
-
+//lib/models/vehicle_detail.dart =====
 class VehicleDetail {
   final String vehicleNumber;
   final String chassisNumber;
@@ -10,6 +9,7 @@ class VehicleDetail {
   final String ownerId;
   final String vehicleType;
   final String expiryDate;
+  final String? platformExpiryDate; // NEW field
 
   VehicleDetail({
     required this.vehicleNumber,
@@ -21,23 +21,27 @@ class VehicleDetail {
     required this.ownerId,
     required this.vehicleType,
     required this.expiryDate,
+    this.platformExpiryDate, // NEW
   });
 
   factory VehicleDetail.fromApiResponse(
     String response,
     Map<String, String> vehicleTypeTranslations,
   ) {
+    // Simplified vehicle type extraction - only tipper or trailer
     String vehicleType = 'NAN';
 
-    final vehicleTypeMatch = RegExp(
-      r'"vehicle_type":\s*"([^"]+)"',
-      caseSensitive: false,
-    ).firstMatch(response);
+    // Check for various indicators of vehicle type
+    final lowerResponse = response.toLowerCase();
 
-    if (vehicleTypeMatch != null) {
-      String extractedType = vehicleTypeMatch.group(1)!;
-      vehicleType =
-          vehicleTypeTranslations[extractedType] ?? extractedType.toLowerCase();
+    if (lowerResponse.contains('tipper') ||
+        lowerResponse.contains('نشال') ||
+        lowerResponse.contains('قلاب')) {
+      vehicleType = 'tipper';
+    } else if (lowerResponse.contains('trailer') ||
+        lowerResponse.contains('تريلا') ||
+        lowerResponse.contains('رأس')) {
+      vehicleType = 'trailer';
     }
 
     return VehicleDetail(
@@ -50,6 +54,7 @@ class VehicleDetail {
       ownerId: _extractField(response, 'owner_id'),
       vehicleType: vehicleType,
       expiryDate: _extractField(response, 'expiry_date'),
+      platformExpiryDate: null, // Will be set later from platform service
     );
   }
 
@@ -59,6 +64,22 @@ class VehicleDetail {
       caseSensitive: false,
     ).firstMatch(response);
     return match?.group(1) ?? 'NAN';
+  }
+
+  // Copy with platform expiry
+  VehicleDetail copyWithPlatformExpiry(String? platformExpiry) {
+    return VehicleDetail(
+      vehicleNumber: vehicleNumber,
+      chassisNumber: chassisNumber,
+      year: year,
+      make: make,
+      ownerNameEnglish: ownerNameEnglish,
+      ownerNameArabic: ownerNameArabic,
+      ownerId: ownerId,
+      vehicleType: vehicleType,
+      expiryDate: expiryDate,
+      platformExpiryDate: platformExpiry,
+    );
   }
 
   Map<String, dynamic> toJson() {
@@ -72,20 +93,7 @@ class VehicleDetail {
       'owner_id': ownerId,
       'vehicle_type': vehicleType,
       'expiry_date': expiryDate,
+      'platform_expiry_date': platformExpiryDate, // NEW
     };
-  }
-
-  factory VehicleDetail.fromJson(Map<String, dynamic> json) {
-    return VehicleDetail(
-      vehicleNumber: json['vehicle_number'] ?? 'NAN',
-      chassisNumber: json['chassis_number'] ?? 'NAN',
-      year: json['year'] ?? 'NAN',
-      make: json['make'] ?? 'NAN',
-      ownerNameEnglish: json['owner_name_english'] ?? 'NAN',
-      ownerNameArabic: json['owner_name_arabic'] ?? 'NAN',
-      ownerId: json['owner_id'] ?? 'NAN',
-      vehicleType: json['vehicle_type'] ?? 'NAN',
-      expiryDate: json['expiry_date'] ?? 'NAN',
-    );
   }
 }

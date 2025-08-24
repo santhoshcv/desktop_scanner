@@ -1,7 +1,9 @@
+import 'package:dart_openai/dart_openai.dart';
 import 'package:desktop_scanner/config/app_settings.dart';
 import 'package:desktop_scanner/screens/main_desktop_screen.dart';
 import 'package:desktop_scanner/screens/settings_screen.dart';
 import 'package:desktop_scanner/screens/setup_screen.dart';
+import 'package:desktop_scanner/services/platform_service.dart';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -21,6 +23,19 @@ void main() async {
     await windowManager.show();
     await windowManager.focus();
   });
+
+  // Load settings first
+  await AppSettings.instance.loadSettings();
+
+  // Set OpenAI key if configured
+  if (AppSettings.instance.openAiApiKey.isNotEmpty) {
+    OpenAI.apiKey = AppSettings.instance.openAiApiKey;
+  }
+
+  // Load platform vehicles if API is configured
+  if (AppSettings.instance.platformApiUrl.isNotEmpty) {
+    await PlatformService.instance.loadVehicles();
+  }
   runApp(const DesktopScannerApp());
 }
 

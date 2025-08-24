@@ -1,4 +1,4 @@
-// lib/config/app_settings.dart
+// ===== 1. UPDATE: lib/config/app_settings.dart =====
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -11,6 +11,7 @@ class AppSettings {
   String openAiApiKey = '';
   String googleVisionApiKey = '';
   String googleSheetsScriptUrl = '';
+  String platformApiUrl = ''; // NEW: Platform API URL
 
   // Regional Settings
   String countryCode = 'QA';
@@ -20,15 +21,10 @@ class AppSettings {
   int maxTokens = 300;
   String aiModel = 'gpt-4';
 
-  // Vehicle Type Translations
+  // Simplified Vehicle Type Translations (only tipper and trailer)
   Map<String, String> vehicleTypeTranslations = {
-    'نشال': 'tipper',
-    'قلاب': 'tipper',
-    'Tipper': 'tipper',
-    'رأس تريلا': 'trailer',
-    'Trailer': 'trailer',
-    'مقطوره قلاب': 'tail',
-    'مقطوره نشال': 'tail',
+    'tipper': 'tipper',
+    'trailer': 'trailer',
   };
 
   Future<void> loadSettings() async {
@@ -37,6 +33,7 @@ class AppSettings {
     openAiApiKey = prefs.getString('openai_api_key') ?? '';
     googleVisionApiKey = prefs.getString('google_vision_api_key') ?? '';
     googleSheetsScriptUrl = prefs.getString('google_sheets_script_url') ?? '';
+    platformApiUrl = prefs.getString('platform_api_url') ?? ''; // NEW
     countryCode = prefs.getString('country_code') ?? 'QA';
     countryName = prefs.getString('country_name') ?? 'Qatar';
     maxTokens = prefs.getInt('max_tokens') ?? 300;
@@ -49,6 +46,7 @@ class AppSettings {
     await prefs.setString('openai_api_key', openAiApiKey);
     await prefs.setString('google_vision_api_key', googleVisionApiKey);
     await prefs.setString('google_sheets_script_url', googleSheetsScriptUrl);
+    await prefs.setString('platform_api_url', platformApiUrl); // NEW
     await prefs.setString('country_code', countryCode);
     await prefs.setString('country_name', countryName);
     await prefs.setInt('max_tokens', maxTokens);
